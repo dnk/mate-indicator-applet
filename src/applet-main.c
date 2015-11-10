@@ -927,14 +927,13 @@ applet_fill_cb (MatePanelApplet * applet, const gchar * iid G_GNUC_UNUSED,
 	if (indicators_loaded == 0) {
 		/* A label to allow for click through */
 		GtkWidget * item = gtk_label_new(_("No Indicators"));
-#if GTK_CHECK_VERSION(3, 0, 0)
-		mate_panel_applet_set_background_widget(applet, item);
-#endif
 		gtk_container_add(GTK_CONTAINER(applet), item);
 		gtk_widget_show(item);
 	} else {
 		gtk_container_add(GTK_CONTAINER(applet), menubar);
+#if !GTK_CHECK_VERSION (3, 0, 0)
 		mate_panel_applet_set_background_widget(applet, menubar);
+#endif
 		gtk_widget_show(menubar);
 	}
 
