@@ -505,24 +505,9 @@ update_accessible_desc(IndicatorObjectEntry * entry, GtkWidget * menuitem)
 	return;
 }
 
-
-static gboolean
-load_module (const gchar * name, GtkWidget * menubar)
+static void
+load_indicator (GtkWidget * menubar, IndicatorObject *io, const gchar *name)
 {
-	g_debug("Looking at Module: %s", name);
-	g_return_val_if_fail(name != NULL, FALSE);
-
-	if (!g_str_has_suffix(name, G_MODULE_SUFFIX)) {
-		return FALSE;
-	}
-
-	g_debug("Loading Module: %s", name);
-
-	/* Build the object for the module */
-	gchar * fullpath = g_build_filename(INDICATOR_DIR, name, NULL);
-	IndicatorObject * io = indicator_object_new_from_file(fullpath);
-	g_free(fullpath);
-
 	/* Set the environment it's in */
 	indicator_object_set_environment(io, (const GStrv)indicator_env);
 
@@ -546,8 +531,65 @@ load_module (const gchar * name, GtkWidget * menubar)
 	}
 
 	g_list_free(entries);
+}
+
+static gboolean
+load_module (const gchar * name, GtkWidget * menubar)
+{
+	g_debug("Looking at Module: %s", name);
+	g_return_val_if_fail(name != NULL, FALSE);
+
+	if (!g_str_has_suffix(name, G_MODULE_SUFFIX)) {
+		return FALSE;
+	}
+
+	g_debug("Loading Module: %s", name);
+
+	/* Build the object for the module */
+	gchar * fullpath = g_build_filename(INDICATOR_DIR, name, NULL);
+	IndicatorObject * io = indicator_object_new_from_file(fullpath);
+	g_free(fullpath);
+
+	load_indicator(menubar, io, name);
 
 	return TRUE;
+}
+
+static void
+load_modules (GtkWidget *menubar, gint *indicators_loaded)
+{
+	if (g_file_test(INDICATOR_DIR, (G_FILE_TEST_EXISTS | G_FILE_TEST_IS_DIR))) {
+		GDir * dir = g_dir_open(INDICATOR_DIR, 0, NULL);
+
+		const gchar * name;
+		gint count = 0;
+		while ((name = g_dir_read_name(dir)) != NULL) {
+#ifdef INDICATOR_APPLET_APPMENU
+			if (g_strcmp0(name, "libappmenu.so")) {
+				continue;
+			}
+#else
+			if (!g_strcmp0(name, "libappmenu.so")) {
+				continue;
+			}
+#endif
+#ifdef INDICATOR_APPLET
+			if (!g_strcmp0(name, "libme.so")) {
+				continue;
+			}
+			if (!g_strcmp0(name, "libdatetime.so")) {
+				continue;
+			}
+#endif
+			if (load_module(name, menubar)) {
+				count++;
+			}
+		}
+
+		*indicators_loaded = count;
+
+		g_dir_close (dir);
+	}
 }
 
 static void
@@ -903,35 +945,7 @@ applet_fill_cb (MatePanelApplet * applet, const gchar * iid G_GNUC_UNUSED,
 	/* Add in filter func */
 	tomboy_keybinder_bind(hotkey_keycode, hotkey_filter, menubar);
 
-	/* load 'em */
-	if (g_file_test(INDICATOR_DIR, (G_FILE_TEST_EXISTS | G_FILE_TEST_IS_DIR))) {
-		GDir * dir = g_dir_open(INDICATOR_DIR, 0, NULL);
-
-		const gchar * name;
-		while ((name = g_dir_read_name(dir)) != NULL) {
-#ifdef INDICATOR_APPLET_APPMENU
-			if (g_strcmp0(name, "libappmenu.so")) {
-				continue;
-			}
-#else
-			if (!g_strcmp0(name, "libappmenu.so")) {
-				continue;
-			}
-#endif
-#ifdef INDICATOR_APPLET
-			if (!g_strcmp0(name, "libme.so")) {
-				continue;
-			}
-			if (!g_strcmp0(name, "libdatetime.so")) {
-				continue;
-			}
-#endif
-			if (load_module(name, menubar)) {
-				indicators_loaded++;
-			}
-		}
-		g_dir_close (dir);
-	}
+	load_modules(menubar, &indicators_loaded);
 
 	if (indicators_loaded == 0) {
 		/* A label to allow for click through */
